@@ -1,0 +1,28 @@
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+.venv/
+
+# Local helper files / scripts
+gt.txt
+gitpush.ps1
+gitpull.ps1
+_generate_structure.py
+_structure_with_content.txt
+_struct_summary.txt
+gt.txt
+
+# runtime
+uploads/
+_old/
