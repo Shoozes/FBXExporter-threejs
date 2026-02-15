@@ -1,0 +1,28 @@
+{
+  "name": "fbxexporter-threejs",
+  "version": "1.0.0",
+  "description": "A binary FBX exporter for Three.js that exports scenes, meshes, and animations to the FBX 7500 format.",
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "node test/roundtrip.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shoozes/FBXExporter-threejs.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Shoozes/FBXExporter-threejs/issues"
+  },
+  "homepage": "https://github.com/Shoozes/FBXExporter-threejs#readme",
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "three": "^0.160.0"
+  }
+}

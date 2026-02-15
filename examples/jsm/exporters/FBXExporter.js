@@ -57,7 +57,9 @@ function normalizeMixamoName( name ) {
 }
 
 function getRotationOrder( order ) {
-	return { 'XYZ': 0, 'XZY': 1, 'YXZ': 2, 'YZX': 3, 'ZXY': 4, 'ZYX': 5 }[ order ] || 0;
+	// FBX uses extrinsic Euler angles; Three.js uses intrinsic.
+	// Intrinsic XYZ == Extrinsic ZYX (FBX 5), etc.
+	return { 'XYZ': 5, 'YXZ': 4, 'ZXY': 3, 'XZY': 2, 'YZX': 1, 'ZYX': 0 }[ order ] || 0;
 }
 
 function getDataFromImage( image, maxTextureSize = Infinity ) {
@@ -325,14 +327,14 @@ export class FBXExporter {
 				const meshBindGlobal = mesh.bindMatrix ? mesh.bindMatrix.clone() : mesh.matrixWorld.clone();
 
 				// We need to calculate the global rest pose for every bone.
-				// Since Three.js does not store the bone's Rest Pose Matrix directly (only the inverse),
-				// we calculate it: BoneRestGlobal = Inverse(BoneInverse) * MeshRestGlobal
+				// boneInverses[i] = inverse(bone_i.matrixWorld) at bind time
+				// So the bone's world-space bind pose = inverse(boneInverses[i])
 				const boneBindGlobals = new Map();
 
 				mesh.skeleton.bones.forEach( ( bone, index ) => {
 					let globalBoneMatrix = new THREE.Matrix4();
 					if ( mesh.skeleton.boneInverses && mesh.skeleton.boneInverses[ index ] ) {
-						globalBoneMatrix.copy( mesh.skeleton.boneInverses[ index ] ).invert().premultiply( meshBindGlobal );
+						globalBoneMatrix.copy( mesh.skeleton.boneInverses[ index ] ).invert();
 					} else {
 						// Fallback if inverse is missing (should not happen in valid SkinnedMesh)
 						globalBoneMatrix.copy( bone.matrixWorld );
