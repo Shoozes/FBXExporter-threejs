@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - exporter - fbx - file roundtrip</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="https://unpkg.com/three@0.160.0/examples/main.css">
+		<style>
+			body { background-color: #a0a0a0; color: #000; }
+			a { color: #f00; }
+			#info { color: #333; }
+		</style>
+	</head>
+	<body>
+		<div id="info">
+			<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> webgl - exporter - fbx - file<br/>
+			Roundtrip Test: Original FBX (Left) vs Re-Imported FBX (Right)<br/>
+			<span style="color:red">Ensure 'test.fbx' exists in the project root.</span>
+		</div>
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+					"three/addons/exporters/FBXExporter.js": "./examples/jsm/exporters/FBXExporter.js",
+					"three/addons/loaders/FBXLoader.js": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/FBXLoader.js",
+					"three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+				}
+			}
+		</script>
+
+		<script type="module">
+
+			import * as THREE from 'three';
+			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+			import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+			import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+			import { FBXExporter } from 'three/addons/exporters/FBXExporter.js';
+
+			const clock = new THREE.Clock();
+
+			let camera, scene, renderer;
+			let sourceModel, sourceAnimations;
+			let mixer, importedMixer;
+			let importedGroup;
+			let loadingManager;
+
+			const params = {
+				exportSkin: true,
+				exportMaterials: true,
+				exportAnimations: true,
+				onlyVisible: true,
+				embedImages: true,
+				maxTextureSize: 1024,
+				scale: 1,
+
+				// Actions
+				exportModel: exportSourceModel,
+				exportScene: exportScene,
+				clearImport: clearImported
+			};
+
+			init();
+			animate();
+
+			function init() {
+
+				const container = document.createElement( 'div' );
+				document.body.appendChild( container );
+
+				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 2000 );
+				camera.position.set( 0, 100, 400 );
+
+				scene = new THREE.Scene();
+				scene.background = new THREE.Color( 0xa0a0a0 );
+				scene.fog = new THREE.Fog( 0xa0a0a0, 200, 2000 );
+
+				const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 3 );
+				hemiLight.position.set( 0, 200, 0 );
+				scene.add( hemiLight );
+
+				const dirLight = new THREE.DirectionalLight( 0xffffff, 3 );
+				dirLight.position.set( 0, 200, 100 );
+				dirLight.castShadow = true;
+				scene.add( dirLight );
+
+				const grid = new THREE.GridHelper( 2000, 20, 0x000000, 0x000000 );
+				grid.material.opacity = 0.2;
+				grid.material.transparent = true;
+				scene.add( grid );
+
+				// Container for re-imported objects
+				importedGroup = new THREE.Group();
+				importedGroup.position.set( 200, 0, 0 );
+				scene.add( importedGroup );
+
+				// ---------------------------------------------------------------------
+				// Load FBX
+				// ---------------------------------------------------------------------
+				loadingManager = new THREE.LoadingManager();
+				const loader = new FBXLoader( loadingManager );
+				
+				// Load test.fbx from root
+				loader.load( '/test.fbx', function ( object ) {
+
+					sourceModel = object;
+					sourceAnimations = object.animations;
+
+					// Center source model roughly
+					sourceModel.position.set( - 100, 0, 0 );
+					scene.add( sourceModel );
+
+					if ( sourceAnimations && sourceAnimations.length > 0 ) {
+
+						mixer = new THREE.AnimationMixer( sourceModel );
+						sourceAnimations.forEach( clip => {
+
+							mixer.clipAction( clip ).play();
+
+						} );
+
+					}
+
+					console.log( 'Source FBX Loaded:', object );
+
+				}, undefined, function ( e ) {
+
+					console.error( 'Failed to load /test.fbx. Make sure the file exists in the root directory.', e );
+
+				} );
+
+				// ---------------------------------------------------------------------
+				// Renderer & GUI
+				// ---------------------------------------------------------------------
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.shadowMap.enabled = true;
+				container.appendChild( renderer.domElement );
+
+				const controls = new OrbitControls( camera, renderer.domElement );
+				controls.target.set( 0, 50, 0 );
+				controls.update();
+
+				window.addEventListener( 'resize', onWindowResize );
+
+				const gui = new GUI();
+				const folderParams = gui.addFolder( 'Settings' );
+				folderParams.add( params, 'exportSkin' ).name( 'Export Skin' );
+				folderParams.add( params, 'exportMaterials' ).name( 'Export Materials' );
+				folderParams.add( params, 'exportAnimations' ).name( 'Export Animation' );
+				folderParams.add( params, 'onlyVisible' ).name( 'Only Visible' );
+				folderParams.add( params, 'embedImages' ).name( 'Embed Textures' );
+				folderParams.add( params, 'maxTextureSize', 2, 4096, 1 ).name( 'Max Tex Size' );
+				folderParams.add( params, 'scale', 0.1, 100 ).name( 'Scale' );
+
+				gui.add( params, 'clearImport' ).name( 'Clear Imported' );
+
+				const folderExport = gui.addFolder( 'Export & Roundtrip' );
+				folderExport.add( params, 'exportModel' ).name( 'Export Source Model' );
+				folderExport.add( params, 'exportScene' ).name( 'Export Entire Scene' );
+
+			}
+
+			function clearImported() {
+
+				importedGroup.clear();
+				if ( importedMixer ) {
+
+					importedMixer.stopAllAction();
+					importedMixer = null;
+
+				}
+
+			}
+
+			async function exportFBX( input, animations ) {
+
+				if ( ! input ) {
+
+					console.warn( 'No input model to export' );
+					return;
+
+				}
+
+				const exporter = new FBXExporter();
+				const options = {
+					exportSkin: params.exportSkin,
+					exportMaterials: params.exportMaterials,
+					onlyVisible: params.onlyVisible,
+					embedImages: params.embedImages,
+					maxTextureSize: params.maxTextureSize,
+					scale: params.scale,
+					animations: params.exportAnimations ? animations : []
+				};
+
+				try {
+
+					console.log( 'Exporting...', options );
+					const blob = await exporter.parse( input, options );
+
+					verifyRoundTrip( blob );
+
+					console.log( `Generated ${blob.size} bytes. Uploading...` );
+					const formData = new FormData();
+					formData.append( 'file', blob, 'roundtrip_test.fbx' );
+
+					const response = await fetch( '/upload-fbx', { method: 'POST', body: formData } );
+					const result = await response.json();
+
+					if ( response.ok ) {
+
+						console.log( `Success! Saved to ${result.path}` );
+						save( blob, 'roundtrip_test.fbx' );
+
+					} else {
+
+						console.error( 'Upload failed:', result.error );
+
+					}
+
+				} catch ( err ) {
+
+					console.error( 'Error exporting FBX:', err );
+
+				}
+
+			}
+
+			function verifyRoundTrip( blob ) {
+
+				clearImported();
+				const url = URL.createObjectURL( blob );
+				const loader = new FBXLoader();
+
+				loader.load( url, ( object ) => {
+
+					console.log( 'Re-imported FBX:', object );
+					importedGroup.add( object );
+
+					if ( object.animations && object.animations.length > 0 ) {
+
+						importedMixer = new THREE.AnimationMixer( object );
+						object.animations.forEach( clip => {
+
+							importedMixer.clipAction( clip ).play();
+
+						} );
+
+					}
+
+					URL.revokeObjectURL( url );
+
+				}, undefined, ( err ) => {
+
+					console.error( 'Error re-importing FBX:', err );
+
+				} );
+
+			}
+
+			function save( blob, filename ) {
+
+				const link = document.createElement( 'a' );
+				link.style.display = 'none';
+				document.body.appendChild( link );
+				link.href = URL.createObjectURL( blob );
+				link.download = filename;
+				link.click();
+				URL.revokeObjectURL( link.href );
+				document.body.removeChild( link );
+
+			}
+
+			function exportSourceModel() {
+
+				exportFBX( sourceModel, sourceAnimations );
+
+			}
+
+			function exportScene() {
+
+				exportFBX( scene, sourceAnimations );
+
+			}
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+				const delta = clock.getDelta();
+
+				if ( mixer ) mixer.update( delta );
+				if ( importedMixer ) importedMixer.update( delta );
+
+				renderer.render( scene, camera );
+
+			}
+
+		</script>
+	</body>
+</html>

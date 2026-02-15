@@ -6,9 +6,15 @@ app = Flask(__name__, static_folder=None)
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Default route: procedural example
 @app.route('/')
 def root():
     return send_from_directory('examples', 'misc_exporter_fbx.html')
+
+# New route: FBX File Load example
+@app.route('/file')
+def file_example():
+    return send_from_directory('examples', 'misc_exporter_fbx_file.html')
 
 @app.route('/favicon.ico')
 def favicon():
@@ -22,15 +28,13 @@ def serve_static(path):
 def upload_fbx():
     if 'file' not in request.files:
         return jsonify({'error': 'No file part'}), 400
-        
+    
     file = request.files['file']
     
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-        
+    
     if file:
-        # Basic sanitization could go here, but strictly speaking 
-        # meant for local testing so standard save is fine.
         filepath = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(filepath)
         size_kb = os.path.getsize(filepath) / 1024
@@ -45,4 +49,6 @@ def upload_fbx():
 
 if __name__ == '__main__':
     print("Server running at http://localhost:5000")
+    print(" - /      : Procedural Example")
+    print(" - /file  : FBX File Roundtrip (requires test.fbx in root)")
     app.run(debug=True, port=5000)
