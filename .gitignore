@@ -23,6 +23,13 @@ _structure_with_content.txt
 _struct_summary.txt
 gt.txt
 
+# Node
+node_modules/
+package-lock.json
+
 # runtime
 uploads/
 _old/
+
+# test artifacts
+test/roundtrip_screenshot.png
