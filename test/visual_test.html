@@ -56,6 +56,9 @@
 			const statusEl = document.getElementById( 'status' );
 			window.__testComplete = false;
 
+			// Advance animation to this time for the screenshot
+			const ANIM_TIME = 0.5;
+
 			let camera, scene, renderer;
 
 			function init() {
@@ -89,7 +92,6 @@
 
 			}
 
-			// Assign a visible material so models show regardless of export settings
 			function applyFallbackMaterial( root, color ) {
 
 				const mat = new THREE.MeshStandardMaterial( { color, flatShading: true } );
@@ -105,7 +107,6 @@
 
 			}
 
-			// Delay needed for SwiftShader WebGL context to stabilise after heavy GPU work
 			const RENDER_SETTLE_MS = 200;
 
 			function delay( ms ) {
@@ -131,15 +132,17 @@
 					original.position.set( - 150, 0, 0 );
 					applyFallbackMaterial( original, 0x4488cc );
 					scene.add( original );
-					renderer.render( scene, camera );
 
-					statusEl.textContent = 'Exporting…';
+					const clips = original.animations.filter( c => c.tracks.length > 0 );
+
+					statusEl.textContent = 'Exporting with animations…';
 					const exporter = new FBXExporter();
 					const blob = await exporter.parse( original, {
 						exportSkin: true,
 						exportMaterials: false,
 						embedImages: false,
-						scale: 1
+						scale: 1,
+						animations: clips
 					} );
 
 					statusEl.textContent = 'Re-importing…';
@@ -157,10 +160,29 @@
 					applyFallbackMaterial( reimported, 0xcc8844 );
 					scene.add( reimported );
 
+					// Play animation on both models
+					const reimClips = reimported.animations.filter( c => c.tracks.length > 0 );
+
+					if ( clips.length > 0 && reimClips.length > 0 ) {
+
+						const mixerOrig = new THREE.AnimationMixer( original );
+						const actionOrig = mixerOrig.clipAction( clips[ 0 ] );
+						actionOrig.play();
+						mixerOrig.update( 0 );
+						mixerOrig.update( ANIM_TIME );
+
+						const mixerReim = new THREE.AnimationMixer( reimported );
+						const actionReim = mixerReim.clipAction( reimClips[ 0 ] );
+						actionReim.play();
+						mixerReim.update( 0 );
+						mixerReim.update( ANIM_TIME );
+
+					}
+
 					await delay( RENDER_SETTLE_MS );
 					renderer.render( scene, camera );
 
-					statusEl.textContent = 'PASS';
+					statusEl.textContent = 'PASS — animated at t=' + ANIM_TIME.toFixed( 1 ) + 's';
 					statusEl.style.background = 'rgba(0,128,0,0.8)';
 
 				} catch ( err ) {

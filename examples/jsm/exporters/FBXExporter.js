@@ -279,12 +279,29 @@ export class FBXExporter {
 			const type = isBone ? 'LimbNode' : ( obj.isMesh ? 'Mesh' : 'Null' );
 			const model = new FbxNode( 'Model' ).addProperty( BigInt( mid ) ).addProperty( nameWithClass( obj.name || `${type}_${obj.id}`, 'Model' ) ).addProperty( type ).addChild( new FbxNode( 'Version' ).addProperty( 232 ) );
 			const p70 = new FbxNode( 'Properties70' );
-			const t = obj.position, r = obj.rotation, s = obj.scale;
+			const t = obj.position, s = obj.scale;
+			const td = obj.userData?.transformData;
+			const hasPreRotation = td && td.preRotation && ( Math.abs( td.preRotation[ 0 ] ) > 1e-6 || Math.abs( td.preRotation[ 1 ] ) > 1e-6 || Math.abs( td.preRotation[ 2 ] ) > 1e-6 );
+			const fbxEulerOrder = td?.eulerOrder || obj.rotation.order;
+			let lclRotDeg;
+			if ( hasPreRotation ) {
+				const preRotRad = td.preRotation.map( THREE.MathUtils.degToRad );
+				const preRotQuat = new THREE.Quaternion().setFromEuler( new THREE.Euler( preRotRad[ 0 ], preRotRad[ 1 ], preRotRad[ 2 ], fbxEulerOrder ) );
+				const lclQuat = preRotQuat.clone().invert().multiply( obj.quaternion );
+				const lclEuler = new THREE.Euler().setFromQuaternion( lclQuat, fbxEulerOrder );
+				lclRotDeg = [ THREE.MathUtils.radToDeg( lclEuler.x ), THREE.MathUtils.radToDeg( lclEuler.y ), THREE.MathUtils.radToDeg( lclEuler.z ) ];
+			} else {
+				const r = obj.rotation;
+				lclRotDeg = [ THREE.MathUtils.radToDeg( r.x ), THREE.MathUtils.radToDeg( r.y ), THREE.MathUtils.radToDeg( r.z ) ];
+			}
 			p70.addChild( createP( 'Lcl Translation', 'Lcl Translation', '', 'A', [ t.x * scale, t.y * scale, t.z * scale ].map( v => new Double( v ) ) ) )
-				.addChild( createP( 'Lcl Rotation', 'Lcl Rotation', '', 'A', [ THREE.MathUtils.radToDeg( r.x ), THREE.MathUtils.radToDeg( r.y ), THREE.MathUtils.radToDeg( r.z ) ].map( v => new Double( v ) ) ) )
+				.addChild( createP( 'Lcl Rotation', 'Lcl Rotation', '', 'A', lclRotDeg.map( v => new Double( v ) ) ) )
 				.addChild( createP( 'Lcl Scaling', 'Lcl Scaling', '', 'A', [ s.x, s.y, s.z ].map( v => new Double( v ) ) ) )
-				.addChild( createP( 'RotationOrder', 'enum', '', '', getRotationOrder( obj.rotation.order ) ) )
+				.addChild( createP( 'RotationOrder', 'enum', '', '', getRotationOrder( fbxEulerOrder ) ) )
 				.addChild( createP( 'InheritType', 'enum', '', '', 1 ) );
+			if ( hasPreRotation ) {
+				p70.addChild( createP( 'PreRotation', 'Vector3D', 'Vector', '', td.preRotation.map( v => new Double( v ) ) ) );
+			}
 			if ( isBone ) {
 				p70.addChild( createP( 'RotationActive', 'bool', '', '', 1 ) );
 				p70.addChild( createP( 'SegmentScaleCompensate', 'bool', '', '', 1 ) );
@@ -533,8 +550,17 @@ export class FBXExporter {
 				else if ( prop === 'scale' ) { keyAttr = 'S'; data = values; }
 				else if ( prop === 'quaternion' ) {
 					keyAttr = 'R'; const eulers = []; const last = new THREE.Euler();
+					const td = bone.userData?.transformData;
+					const fbxOrder = td?.eulerOrder || 'XYZ';
+					let preRotInv = null;
+					if ( td?.preRotation && ( Math.abs( td.preRotation[ 0 ] ) > 1e-6 || Math.abs( td.preRotation[ 1 ] ) > 1e-6 || Math.abs( td.preRotation[ 2 ] ) > 1e-6 ) ) {
+						const pr = td.preRotation.map( THREE.MathUtils.degToRad );
+						preRotInv = new THREE.Quaternion().setFromEuler( new THREE.Euler( pr[ 0 ], pr[ 1 ], pr[ 2 ], fbxOrder ) ).invert();
+					}
 					for ( let k = 0; k < values.length; k += 4 ) {
-						const e = new THREE.Euler().setFromQuaternion( new THREE.Quaternion().fromArray( values, k ) );
+						const q = new THREE.Quaternion().fromArray( values, k );
+						if ( preRotInv ) q.premultiply( preRotInv );
+						const e = new THREE.Euler().setFromQuaternion( q, fbxOrder );
 						if ( k > 0 ) {
 							if ( Math.abs( e.x - last.x ) > Math.PI ) e.x -= Math.sign( e.x - last.x ) * 2 * Math.PI;
 							if ( Math.abs( e.y - last.y ) > Math.PI ) e.y -= Math.sign( e.y - last.y ) * 2 * Math.PI;
