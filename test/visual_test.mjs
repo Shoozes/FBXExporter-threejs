@@ -2,15 +2,10 @@ import { createServer } from 'http';
 import { readFile } from 'fs/promises';
 import { resolve, extname } from 'path';
 import { fileURLToPath } from 'url';
-import puppeteer from 'puppeteer-core';
+import { chromium } from 'playwright';
 
 const PROJECT_ROOT = resolve( fileURLToPath( import.meta.url ), '..', '..' );
 const SCREENSHOT_PATH = resolve( fileURLToPath( import.meta.url ), '..', 'roundtrip_screenshot.png' );
-
-const CHROMIUM_PATH = process.env.CHROMIUM_PATH || '/usr/bin/chromium-browser';
-
-// Delay for SwiftShader WebGL render to flush
-const RENDER_SETTLE_MS = 500;
 
 const MIME = {
 	'.html': 'text/html',
@@ -61,9 +56,7 @@ console.log( `Server listening on http://127.0.0.1:${port}` );
 let browser;
 try {
 
-	browser = await puppeteer.launch( {
-		executablePath: CHROMIUM_PATH,
-		headless: true,
+	browser = await chromium.launch( {
 		args: [
 			'--no-sandbox',
 			'--disable-setuid-sandbox',
@@ -75,25 +68,21 @@ try {
 		],
 	} );
 
-	const page = await browser.newPage();
-	await page.setViewport( { width: 1280, height: 720 } );
+	const page = await browser.newPage( { viewport: { width: 1280, height: 720 } } );
 
 	page.on( 'console', ( msg ) => console.log( 'PAGE:', msg.text() ) );
 	page.on( 'pageerror', ( err ) => console.error( 'PAGE ERROR:', err.message ) );
 
 	console.log( 'Navigating to visual test…' );
 	await page.goto( `http://127.0.0.1:${port}/test/visual_test.html`, {
-		waitUntil: 'networkidle0',
+		waitUntil: 'networkidle',
 		timeout: 60000,
 	} );
 
 	// Wait for the test to signal completion
 	await page.waitForFunction( '!!window.__testComplete', { timeout: 60000 } );
 
-	// Delay to ensure final render is flushed in software WebGL
-	await new Promise( ( r ) => setTimeout( r, RENDER_SETTLE_MS ) );
-
-	await page.screenshot( { path: SCREENSHOT_PATH, fullPage: false } );
+	await page.screenshot( { path: SCREENSHOT_PATH } );
 	console.log( `Screenshot saved to ${SCREENSHOT_PATH}` );
 
 	const status = await page.evaluate( () => document.getElementById( 'status' ).textContent );
