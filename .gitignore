@@ -30,3 +30,6 @@ package-lock.json
 # runtime
 uploads/
 _old/
+
+# test artifacts
+test/roundtrip_screenshot.png
