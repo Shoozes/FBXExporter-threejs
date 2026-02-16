@@ -63,7 +63,7 @@ try {
 
 	browser = await puppeteer.launch( {
 		executablePath: CHROMIUM_PATH,
-		headless: 'new',
+		headless: true,
 		args: [
 			'--no-sandbox',
 			'--disable-setuid-sandbox',

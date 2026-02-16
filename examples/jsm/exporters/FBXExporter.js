@@ -327,7 +327,8 @@ export class FBXExporter {
 				const meshBindGlobal = mesh.bindMatrix ? mesh.bindMatrix.clone() : mesh.matrixWorld.clone();
 
 				// We need to calculate the global rest pose for every bone.
-				// boneInverses[i] = inverse(bone_i.matrixWorld) at bind time
+				// boneInverses[i] stores inverse(bone_i.matrixWorld) captured when
+				// the skeleton was originally bound to the mesh geometry.
 				// So the bone's world-space bind pose = inverse(boneInverses[i])
 				const boneBindGlobals = new Map();
 
